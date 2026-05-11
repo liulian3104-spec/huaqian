@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>課金紀錄本 - 紫色夢幻版</title>
+    <style>
+        :root {
+            --primary-purple: #a29bfe;
+            --light-purple: #efecff;
+            --dark-purple: #6c5ce7;
+            --bg-color: #f9f8ff;
+        }
+
+        body {
+            font-family: "Microsoft JhengHei", sans-serif;
+            background-color: var(--bg-color);
+            color: #444;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 500px;
+            background: white;
+            padding: 20px;
+            border-radius: 20px;
+            box-shadow: 0 10px 25px rgba(162, 155, 254, 0.2);
+        }
+
+        h2 { color: var(--dark-purple); text-align: center; }
+
+        /* 表單樣式 */
+        .input-group {
+            margin-bottom: 15px;
+        }
+
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+
+        input, select {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid var(--light-purple);
+            border-radius: 10px;
+            box-sizing: border-box;
+        }
+
+        .btn-row { display: flex; gap: 10px; margin-top: 10px; }
+
+        button {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: 0.3s;
+        }
+
+        .btn-add { background-color: var(--primary-purple); color: white; }
+        .btn-add:hover { background-color: var(--dark-purple); }
+
+        .btn-export { background-color: #fab1a0; color: white; }
+
+        /* 明細樣式 */
+        .record-card {
+            background: var(--light-purple);
+            margin: 10px 0;
+            padding: 15px;
+            border-radius: 15px;
+            position: relative;
+        }
+
+        .delete-btn {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            color: #ff7675;
+            cursor: pointer;
+        }
+
+        /* 分頁按鈕 */
+        .pagination {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        .page-btn {
+            background: white;
+            border: 2px solid var(--primary-purple);
+            color: var(--dark-purple);
+            padding: 5px 15px;
+        }
+
+        /* 總結區 */
+        .summary {
+            margin-top: 20px;
+            padding: 15px;
+            background: #fff3cd;
+            border-radius: 15px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>錢終究是吹到米哈遊大樓</h2>
+
+    <div class="input-group">
+        <label>日期與品項</label>
+        <input type="date" id="date">
+        <input type="text" id="item" placeholder="買了什麼？" style="margin-top:5px;">
+    </div>
+
+    <div class="input-group">
+        <label>對象 (遊戲)</label>
+        <div style="display:flex; gap:5px;">
+            <select id="targetSelect"></select>
+            <button onclick="addNewTarget()" style="flex:0; white-space:nowrap; padding:5px 10px; background:#ddd;">+ 新增</button>
+        </div>
+    </div>
+
+    <div class="input-group">
+        <label>台幣 ($)</label>
+        <input type="number" id="amount" placeholder="0">
+    </div>
+
+    <button class="btn-add" onclick="addRecord()">送出紀錄 ✨</button>
+
+    <hr>
+
+    <h3>📜 支出明細</h3>
+    <div id="recordList"></div>
+
+    <div class="pagination">
+        <button class="page-btn" onclick="prevPage()">上一頁</button>
+        <span id="pageInfo">第 1 / 1 頁</span>
+        <button class="page-btn" onclick="nextPage()">下一頁</button>
+    </div>
+
+    <div class="summary">
+        <h4>📊 年度總結</h4>
+        <p id="annualTotal">2024 總金額：$0</p>
+        <button class="btn-export" onclick="exportToExcel()">匯出 Excel 💾</button>
+    </div>
+</div>
+
+<script>
+    let records = JSON.parse(localStorage.getItem('gameRecords')) || [];
+    let targets = JSON.parse(localStorage.getItem('gameTargets')) || ['未分類', '原神'];
+    let currentPage = 1;
+    const itemsPerPage = 5;
+
+    // 初始化
+    window.onload = () => {
+        updateTargetDropdown();
+        renderRecords();
+        updateSummary();
+        document.getElementById('date').valueAsDate = new Date();
+    };
+
+    // 新增對象
+    function addNewTarget() {
+        const name = prompt("請輸入新的遊戲或對象名稱：");
+        if (name) {
+            targets.push(name);
+            localStorage.setItem('gameTargets', JSON.stringify(targets));
+            updateTargetDropdown();
+        }
+    }
+
+    function updateTargetDropdown() {
+        const select = document.getElementById('targetSelect');
+        select.innerHTML = targets.map(t => `<option value="${t}">${t}</option>`).join('');
+    }
+
+    // 新增紀錄
+    function addRecord() {
+        const date = document.getElementById('date').value;
+        const item = document.getElementById('item').value;
+        const target = document.getElementById('targetSelect').value;
+        const amount = parseInt(document.getElementById('amount').value) || 0;
+
+        if (!item) return alert("請輸入品項名稱！");
+
+        const newRecord = { id: Date.now(), date, item, target, amount };
+        records.unshift(newRecord); // 新的在前
+        saveAndRefresh();
+        
+        document.getElementById('item').value = '';
+        document.getElementById('amount').value = '';
+    }
+
+    function saveAndRefresh() {
+        localStorage.setItem('gameRecords', JSON.stringify(records));
+        renderRecords();
+        updateSummary();
+    }
+
+    // 渲染清單（分頁）
+    function renderRecords() {
+        const listDiv = document.getElementById('recordList');
+        const start = (currentPage - 1) * itemsPerPage;
+        const end = start + itemsPerPage;
+        const paginatedItems = records.slice(start, end);
+
+        listDiv.innerHTML = paginatedItems.map(r => `
+            <div class="record-card">
+                <span class="delete-btn" onclick="deleteRecord(${r.id})">✖</span>
+                <div>📅 ${r.date}</div>
+                <strong>${r.item}</strong>
+                <div style="font-size: 0.9em; color: #666;">對象：${r.target}</div>
+                <div style="color: var(--dark-purple); font-weight: bold;">$ ${r.amount.toLocaleString()}</div>
+            </div>
+        `).join('');
+
+        const totalPages = Math.ceil(records.length / itemsPerPage) || 1;
+        document.getElementById('pageInfo').innerText = `第 ${currentPage} / ${totalPages} 頁`;
+    }
+
+    function deleteRecord(id) {
+        if(confirm('確定要刪除這筆紀錄嗎？')) {
+            records = records.filter(r => r.id !== id);
+            saveAndRefresh();
+        }
+    }
+
+    // 分頁控制
+    function prevPage() { if (currentPage > 1) { currentPage--; renderRecords(); } }
+    function nextPage() { 
+        if (currentPage < Math.ceil(records.length / itemsPerPage)) { 
+            currentPage++; renderRecords(); 
+        } 
+    }
+
+    // 年度總結
+    function updateSummary() {
+        const currentYear = new Date().getFullYear();
+        const total = records
+            .filter(r => new Date(r.date).getFullYear() === currentYear)
+            .reduce((sum, r) => sum + r.amount, 0);
+        document.getElementById('annualTotal').innerText = `${currentYear} 年度總金額：$${total.toLocaleString()}`;
+    }
+
+    // 匯出 Excel (CSV 格式)
+    function exportToExcel() {
+        let csvContent = "\uFEFF日期,品項,對象,金額\n";
+        records.forEach(r => {
+            csvContent += `${r.date},${r.item},${r.target},${r.amount}\n`;
+        });
+
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement("a");
+        const url = URL.createObjectURL(blob);
+        link.setAttribute("href", url);
+        link.setAttribute("download", `課金紀錄_${new Date().toLocaleDateString()}.csv`);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+</script>
+
+</body>
+</html>
